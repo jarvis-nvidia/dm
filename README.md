@@ -8,7 +8,7 @@ DevMind is an intelligent, agent-powered developer assistant designed to transfo
 - **Personalized Debugging Style**: Learns from commit history and detects bug patterns to tailor suggestions (e.g., prioritizes debugging when bugs are detected), implemented in the dashboard.
 - **Multi-Platform Experience**: Functional Streamlit web dashboard; VS Code extension build succeeds, with command registration in progress.
 - **Contextual Awareness**: Analyzes code diffs and related files (working via dashboard API integration).
-
+- **Model Used**: "blackboxai/nousresearch/hermes-2-pro-llama-3-8b" for enhanced reasoning and personalization.
 ## Current Status
 - **Dashboard**: Fully operational at `http://localhost:8501`. Test with a diff (e.g., `+if error: pass`) to see personalized debugging in action.
 - **VS Code Extension**: Build process works (`npm run package`), but the `DevMind: Generate Commit` command isn’t yet visible in the debug environment due to configuration issues. This is a work in progress.
