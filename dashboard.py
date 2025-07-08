@@ -2,8 +2,20 @@ import streamlit as st
 import requests
 import os
 
-st.title("DevMind Commit Generator")
-st.header("Generate Agent-Powered Commit Message")
+# Index project files for context
+def index_project_files(directory):
+    file_context = ""
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(('.py', '.ts', '.js')):
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()[:500]  # Limit to first 500 chars
+                    file_context += f"File: {file_path}\nContent Snippet: {content}\n\n"
+    return file_context
+
+project_dir = os.path.dirname(os.path.abspath(__file__))
+project_context = index_project_files(project_dir)
 
 # Load commit history
 commit_history = []
@@ -11,34 +23,55 @@ if os.path.exists("commit_history.txt"):
     with open("commit_history.txt", "r") as f:
         commit_history = [line.strip() for line in f if line.strip()]
 
-# Simulate related files (agent file analysis)
-related_files = ["test.py", "main.py", "utils.py"]  # Expand with actual workspace files later
-file_context = "\n".join([f"File: {f}" for f in related_files])
+st.title("DevMind Commit Generator")
+st.header("Select Feature to Generate Commit Message")
+
+# Feature selection
+feature = st.radio("Choose a feature:", ["Agent-Powered Contextual Awareness", "Personalized Debugging Style",
+                                        "Full Project Understanding", "Commit Storytelling"])
 
 diff = st.text_area("Enter your code diff", height=200)
-if st.button("Generate Agent-Powered Commit Message"):
+
+if st.button("Generate Commit Message"):
     if not diff:
         st.warning("Please enter a code diff.")
     else:
         try:
-            # Analyze commit history for style (e.g., common keywords)
             style_hints = " ".join(commit_history) if commit_history else "default style"
-            prompt = f"Act as a team of AI agents analyzing this code diff and related files:\nDiff:\n{diff}\nRelated Files:\n{file_context}\n\n- Intent Agent: Determine the intent (e.g., bug fix, feature) and output: 'Intent: [intent]'.\n- Context Agent: Identify affected modules and output: 'Modules: [list]'.\n- Review Agent: Suggest reviewers and output: 'Reviewers: [list]'.\nCombine results into a structured commit message story:\n- Why: [reason based on intent]\n- Modules: [list from Context Agent]\n- Reviewers: [list from Review Agent]\n\nKeep responses concise and reflect multi-agent reasoning."
-
-            # Detect bug patterns
+            related_files = ["test.py", "main.py", "utils.py"]  # Simulated related files
+            file_context = "\n".join([f"File: {f}" for f in related_files])
             bug_patterns = ["error", "bug", "fix", "exception"]
-            if any(pattern in diff.lower() for pattern in bug_patterns):
-                st.warning("Potential bug detected! Tailoring suggestion for debugging.")
-                prompt += "\nPrioritize debugging context due to bug detection."
+
+            if feature == "Agent-Powered Contextual Awareness":
+                prompt = f"Act as a team of AI agents using blackboxai/nousresearch/hermes-2-pro-llama-3-8b:\nDiff:\n{diff}\nRelated Files:\n{file_context}\n\n- Intent Agent: Determine intent, output: 'Intent: [intent]'.\n- Context Agent: Identify modules, output: 'Modules: [list]'.\n- Review Agent: Suggest reviewers, output: 'Reviewers: [list]'.\nCombine into:\n- Why: [reason based on intent]\n- Modules: [list]\n- Reviewers: [list]\n\nKeep concise."
+                model = "blackboxai/nousresearch/hermes-2-pro-llama-3-8b"
+
+            elif feature == "Personalized Debugging Style":
+                prompt = f"Analyze diff with personalization using blackboxai/nousresearch/hermes-2-pro-llama-3-8b:\nDiff:\n{diff}\nStyle Hints: {style_hints}\nProvide:\n- Why: [reason, tailored to style]\n- Modules: [affected modules]\n- Reviewers: [e.g., @kartik, @john]\n\nKeep concise."
+                if any(pattern in diff.lower() for pattern in bug_patterns):
+                    st.warning("Potential bug detected! Tailoring for debugging.")
+                    prompt += "\nPrioritize debugging context."
+                model = "blackboxai/nousresearch/hermes-2-pro-llama-3-8b"
+
+            elif feature == "Full Project Understanding":
+                prompt = f"Analyze diff and project context using blackboxai/meta-llama/llama-4-scout:\nDiff:\n{diff}\nProject Context:\n{project_context}\n\n- Intent Agent: Determine intent, output: 'Intent: [intent]'.\n- Context Agent: Identify modules and cross-file relationships, output: 'Modules: [list]'.\n- Review Agent: Suggest reviewers, output: 'Reviewers: [list]'.\nCombine into:\n- Why: [reason based on intent and context]\n- Modules: [list with relationships]\n- Reviewers: [list]\n\nKeep concise."
+                if any(pattern in diff.lower() for pattern in bug_patterns):
+                    st.warning("Potential bug detected! Tailoring for debugging.")
+                    prompt += "\nPrioritize debugging context."
+                model = "blackboxai/meta-llama/llama-4-scout"
+
+            else:  # Commit Storytelling
+                prompt = f"Generate a commit story using blackboxai/nousresearch/hermes-2-pro-llama-3-8b:\nDiff:\n{diff}\nProvide:\n- Why: [reason for change]\n- Modules: [affected modules]\n- Reviewers: [e.g., @kartik, @john]\n\nKeep concise."
+                model = "blackboxai/nousresearch/hermes-2-pro-llama-3-8b"
 
             response = requests.post(
                 "https://api.blackbox.ai/chat/completions",
                 headers={
-                    "Authorization": "Bearer sk-8vK21JMn9O2qpxOAKew83Q",  # Replace with your actual API key
+                    "Authorization": "Bearer sk-8vK21JMn9O2qpxOAKew83Q",  # Replace with your key
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "blackboxai/nousresearch/hermes-2-pro-llama-3-8b",  # Updated model
+                    "model": model,
                     "messages": [{"role": "user", "content": prompt}]
                 }
             )
@@ -46,7 +79,7 @@ if st.button("Generate Agent-Powered Commit Message"):
             data = response.json()
             if data.get("choices") and data["choices"][0]["message"]["content"]:
                 story = data["choices"][0]["message"]["content"].strip()
-                st.success("Agent-Powered Commit Story:")
+                st.success(f"{feature} Commit Story:")
                 st.code(story, language="text")
             else:
                 st.error("No valid response from API")
@@ -56,4 +89,4 @@ if st.button("Generate Agent-Powered Commit Message"):
             st.error(f"Unexpected error: {str(e)}")
 
 st.markdown("---")
-st.write("Generate commit messages with agent-powered contextual insights.")
+st.write("Generate commit messages with various AI-powered features.")
