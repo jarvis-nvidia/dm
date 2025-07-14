@@ -1,0 +1,43 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Environment & Configuration
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# LLM Integration
+groq==0.4.1
+openai==1.6.1
+
+# Vector Store & Embeddings (M2 Optimized)
+chromadb==0.4.18
+sentence-transformers==2.2.2
+numpy==1.24.4
+torch==2.1.0
+
+# Git Operations
+GitPython==3.1.40
+pygit2==1.13.3
+
+# HTTP & Async
+httpx==0.25.2
+aiofiles==23.2.1
+
+# Data Processing
+pandas==2.1.4
+PyYAML==6.0.1
+
+# Development & Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Logging & Monitoring
+structlog==23.2.0
