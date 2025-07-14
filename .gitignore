@@ -1,0 +1,4 @@
+/venv/lib
+/venv/bin
+node_modules
+venv
