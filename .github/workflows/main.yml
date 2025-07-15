@@ -1,0 +1,187 @@
+name: DevMind CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE_NAME: ${{ github.repository }}/api-server
+  WEB_IMAGE_NAME: ${{ github.repository }}/web-dashboard
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [api-server, web-dashboard]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python for API
+        if: matrix.service == 'api-server'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js for Dashboard
+        if: matrix.service == 'web-dashboard'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: './packages/web-dashboard/package-lock.json'
+
+      - name: Install API Dependencies
+        if: matrix.service == 'api-server'
+        run: |
+          cd packages/api-server
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Install Web Dependencies
+        if: matrix.service == 'web-dashboard'
+        run: |
+          cd packages/web-dashboard
+          npm ci
+
+      - name: Run API Tests
+        if: matrix.service == 'api-server'
+        run: |
+          cd packages/api-server
+          pytest --cov=app --cov-report=xml
+
+      - name: Run Web Tests
+        if: matrix.service == 'web-dashboard'
+        run: |
+          cd packages/web-dashboard
+          npm run test
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./packages/${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [api-server, web-dashboard]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python for API
+        if: matrix.service == 'api-server'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js for Dashboard
+        if: matrix.service == 'web-dashboard'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Lint API
+        if: matrix.service == 'api-server'
+        run: |
+          cd packages/api-server
+          pip install flake8 black isort
+          flake8 .
+          black --check .
+          isort --check-only .
+
+      - name: Lint Web
+        if: matrix.service == 'web-dashboard'
+        run: |
+          cd packages/web-dashboard
+          npm run lint
+
+  build:
+    name: Build and Push Images
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./packages/api-server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-api
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./packages/web-dashboard
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-web
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment:
+      name: production
+      url: https://devmind.example.com
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Deploy to Production Server
+        run: |
+          scp docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/devmind/
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /opt/devmind && \
+          echo \"SECRET_KEY=${{ secrets.SECRET_KEY }}\" > .env && \
+          echo \"GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}\" >> .env && \
+          docker-compose pull && \
+          docker-compose up -d --force-recreate"

@@ -1,0 +1,174 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  build-preview:
+    name: Build Preview Environment
+    runs-on: ubuntu-latest
+
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./packages/api-server
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/devmind-api:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./packages/web-dashboard
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/devmind-web:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to ECS
+        id: deploy
+        run: |
+          # Update ECS task definitions
+          aws ecs register-task-definition \
+            --family devmind-preview-api \
+            --container-definitions "[{\"name\":\"api\",\"image\":\"${{ steps.login-ecr.outputs.registry }}/devmind-api:pr-${{ github.event.pull_request.number }}\"}]"
+
+          aws ecs register-task-definition \
+            --family devmind-preview-web \
+            --container-definitions "[{\"name\":\"web\",\"image\":\"${{ steps.login-ecr.outputs.registry }}/devmind-web:pr-${{ github.event.pull_request.number }}\"}]"
+
+          # Create new ECS service or update existing one
+          aws ecs update-service \
+            --cluster devmind-preview \
+            --service pr-${{ github.event.pull_request.number }} \
+            --task-definition devmind-preview-web:${{ github.event.pull_request.number }}
+
+          echo "preview_url=https://pr-${{ github.event.pull_request.number }}.preview.devmind.example.com" >> $GITHUB_OUTPUT
+
+  e2e-tests:
+    name: Run E2E Tests
+    needs: build-preview
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Playwright
+        run: |
+          cd packages/web-dashboard
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Run E2E tests
+        run: |
+          cd packages/web-dashboard
+          PLAYWRIGHT_TEST_BASE_URL=${{ needs.build-preview.outputs.preview_url }} npm run test:e2e
+
+  load-testing:
+    name: Load Testing
+    needs: [build-preview, e2e-tests]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install k6
+        run: |
+          curl https://github.com/loadimpact/k6/releases/download/v0.45.0/k6-v0.45.0-linux64.tar.gz -L | tar xvz --strip-components 1
+
+      - name: Run load tests
+        run: |
+          ./k6 run tests/load-testing/preview-load-test.js \
+            -e BASE_URL=${{ needs.build-preview.outputs.preview_url }}
+
+  security-scan:
+    name: Preview Security Scan
+    needs: build-preview
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run OWASP ZAP scan
+        uses: zaproxy/action-full-scan@v0.7.0
+        with:
+          target: ${{ needs.build-preview.outputs.preview_url }}
+
+  cleanup:
+    name: Cleanup Preview
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.state == 'closed'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Delete ECS Service
+        run: |
+          aws ecs delete-service \
+            --cluster devmind-preview \
+            --service pr-${{ github.event.pull_request.number }} \
+            --force
+
+      - name: Delete ECR Images
+        run: |
+          aws ecr batch-delete-image \
+            --repository-name devmind-api \
+            --image-ids imageTag=pr-${{ github.event.pull_request.number }}
+          aws ecr batch-delete-image \
+            --repository-name devmind-web \
+            --image-ids imageTag=pr-${{ github.event.pull_request.number }}
+
+  notify:
+    name: Notification
+    needs: [build-preview, e2e-tests, load-testing, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Update PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const preview_url = '${{ needs.build-preview.outputs.preview_url }}';
+            const body = `Preview environment is ready! 🚀\n\nYou can access it at: ${preview_url}\n\nE2E Tests: ${{ needs.e2e-tests.result }}\nLoad Tests: ${{ needs.load-testing.result }}\nSecurity Scan: ${{ needs.security-scan.result }}`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Notify on Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

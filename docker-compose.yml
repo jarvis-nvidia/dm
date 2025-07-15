@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  api-server:
+    build:
+      context: ./packages/api-server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - api-data:/app/data
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - SECRET_KEY=${SECRET_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=llama-3.1-70b-versatile
+      - MAX_WORKERS=4
+      - BATCH_SIZE=16
+      - CACHE_SIZE_MB=512
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - devmind-network
+
+  web-dashboard:
+    build:
+      context: ./packages/web-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://api-server:8000
+    depends_on:
+      api-server:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - devmind-network
+
+volumes:
+  api-data:
+    driver: local
+
+networks:
+  devmind-network:
+    driver: bridge
