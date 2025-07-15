@@ -1,56 +1,210 @@
 """Vector store service for RAG capabilities using ChromaDB, optimized for M2 Mac."""
 import os
 import hashlib
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 from app.core.config import settings
+from app.services.chunking import chunking_strategy, CodeChunk
 import logging
 import gc
 import threading
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 logger = logging.getLogger(__name__)
 
 class VectorStoreService:
     def __init__(self):
-        # Ensure data directory exists
+        # Initialize directories
         os.makedirs("./data/vectordb", exist_ok=True)
+        os.makedirs("./data/cache", exist_ok=True)
 
-        # Configure ChromaDB client with memory-efficient settings
+        # Configure ChromaDB client with optimized settings
         self.client = chromadb.PersistentClient(
             path="./data/vectordb",
             settings=Settings(
                 anonymized_telemetry=False,
                 allow_reset=True,
-                # Use sqlite WAL mode for better performance
                 chroma_db_impl="duckdb+parquet",
                 persist_directory="./data/vectordb"
             )
         )
 
-        # Use sentence transformers for embedding (optimized for M2)
+        # Initialize embedding function with caching
         self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name=settings.EMBEDDING_MODEL,
-            # Use half precision for better memory usage on M2
-            normalize_embeddings=True
+            normalize_embeddings=True,
+            cache_dir="./data/cache/embeddings"
         )
 
-        # Track memory usage
-        self.memory_monitor = threading.Thread(target=self._monitor_memory_usage, daemon=True)
+        # Initialize collections with optimized settings
+        self.collections = {
+            'code': self._get_or_create_collection("code_chunks"),
+            'docs': self._get_or_create_collection("documentation"),
+            'metadata': self._get_or_create_collection("chunk_metadata")
+        }
+
+        # Start memory monitoring
+        self._start_memory_monitor()
+
+    def _start_memory_monitor(self):
+        """Start memory monitoring thread."""
+        self.memory_monitor = threading.Thread(
+            target=self._monitor_memory_usage,
+            daemon=True
+        )
         self.memory_monitor.start()
 
-        # Create or get the collections
+    async def process_file_content(
+        self,
+        file_path: str,
+        content: str,
+        metadata: Dict[str, Any]
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Process file content and store chunks in vector store."""
         try:
-            self.code_collection = self._get_or_create_collection("code_chunks")
-            self.docs_collection = self._get_or_create_collection("documentation")
-            logger.info("Vector store collections initialized")
+            chunk_counter = 0
+            async for chunk in chunking_strategy.process_file(file_path, content, metadata):
+                chunk_id = await self._store_chunk(chunk)
+                chunk_counter += 1
+
+                # Yield progress information
+                yield {
+                    'status': 'processing',
+                    'chunk_id': chunk_id,
+                    'progress': chunk_counter,
+                    'file_path': file_path
+                }
+
+            # Yield completion status
+            yield {
+                'status': 'completed',
+                'total_chunks': chunk_counter,
+                'file_path': file_path
+            }
+
         except Exception as e:
-            logger.error(f"Error initializing vector store collections: {str(e)}")
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            yield {
+                'status': 'error',
+                'error': str(e),
+                'file_path': file_path
+            }
+
+    async def _store_chunk(self, chunk: CodeChunk) -> str:
+        """Store a code chunk in the vector store."""
+        try:
+            # Generate chunk ID
+            chunk_id = self._generate_chunk_id(chunk)
+
+            # Prepare chunk data
+            document = chunk.content
+            metadata = {
+                **chunk.metadata,
+                'chunk_type': chunk.chunk_type,
+                'language': chunk.language,
+                'start_line': chunk.start_line,
+                'end_line': chunk.end_line,
+                'semantic_score': chunk.semantic_score,
+                'complexity': chunk.complexity
+            }
+
+            # Store imports and dependencies in metadata collection
+            if chunk.imports or chunk.dependencies:
+                self.collections['metadata'].upsert(
+                    ids=[f"{chunk_id}_meta"],
+                    documents=[str({
+                        'imports': chunk.imports,
+                        'dependencies': chunk.dependencies
+                    })],
+                    metadatas=[{'chunk_id': chunk_id}]
+                )
+
+            # Store the main chunk
+            self.collections['code'].upsert(
+                ids=[chunk_id],
+                documents=[document],
+                metadatas=[metadata]
+            )
+
+            return chunk_id
+
+        except Exception as e:
+            logger.error(f"Error storing chunk: {str(e)}")
             raise
 
+    async def search_code_chunks(
+        self,
+        query: str,
+        n_results: int = 5,
+        filter_dict: Optional[Dict[str, Any]] = None,
+        include_metadata: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Search for relevant code chunks with enhanced metadata."""
+        try:
+            # Limit n_results for memory efficiency
+            n_results = min(n_results, 20)
+
+            # Perform the search
+            results = self.collections['code'].query(
+                query_texts=[query],
+                n_results=n_results,
+                where=filter_dict,
+                include=['documents', 'metadatas', 'distances']
+            )
+
+            if not results['documents'] or len(results['documents'][0]) == 0:
+                return []
+
+            # Process results
+            documents = []
+            for i, doc in enumerate(results['documents'][0]):
+                chunk_data = {
+                    'content': doc,
+                    'metadata': results['metadatas'][0][i],
+                    'distance': float(results['distances'][0][i]),
+                    'id': results['ids'][0][i]
+                }
+
+                # Include additional metadata if requested
+                if include_metadata:
+                    await self._enrich_chunk_metadata(chunk_data)
+
+                documents.append(chunk_data)
+
+            return documents
+
+        except Exception as e:
+            logger.error(f"Error searching code chunks: {str(e)}")
+            return []
+
+    async def _enrich_chunk_metadata(self, chunk_data: Dict[str, Any]):
+        """Enrich chunk data with additional metadata."""
+        try:
+            meta_results = self.collections['metadata'].query(
+                query_texts=[chunk_data['id']],
+                where={'chunk_id': chunk_data['id']},
+                n_results=1
+            )
+
+            if meta_results['documents'] and meta_results['documents'][0]:
+                import ast
+                additional_meta = ast.literal_eval(meta_results['documents'][0][0])
+                chunk_data['metadata'].update(additional_meta)
+
+        except Exception as e:
+            logger.error(f"Error enriching chunk metadata: {str(e)}")
+
+    def _generate_chunk_id(self, chunk: CodeChunk) -> str:
+        """Generate a unique ID for a chunk."""
+        content_hash = hashlib.md5(chunk.content.encode()).hexdigest()
+        return f"c_{content_hash}_{chunk.start_line}_{chunk.end_line}"
+
     def _get_or_create_collection(self, name: str):
-        """Get an existing collection or create a new one with optimized settings."""
+        """Get or create a collection with optimized settings."""
         try:
             return self.client.get_collection(
                 name=name,
@@ -61,189 +215,103 @@ class VectorStoreService:
                 name=name,
                 embedding_function=self.embedding_function,
                 metadata={
-                    "hnsw:space": "cosine",  # Cosine similarity for code similarity
-                    "hnsw:construction_ef": 80,  # Lower for memory efficiency
-                    "hnsw:search_ef": 40,     # Lower for faster search
-                    "hnsw:M": 8              # Lower for better memory usage
+                    'hnsw:space': 'cosine',
+                    'hnsw:construction_ef': 80,
+                    'hnsw:search_ef': 40,
+                    'hnsw:M': 8
                 }
             )
 
-    def _generate_id(self, text: str, prefix: str = "") -> str:
-        """Generate a unique ID for a document based on its content."""
-        hash_id = hashlib.md5(text.encode()).hexdigest()
-        return f"{prefix}{hash_id}" if prefix else hash_id
+    async def delete_repository_chunks(self, repo_name: str) -> int:
+        """Delete all chunks from a specific repository."""
+        try:
+            # Count chunks to be deleted
+            count = self.collections['code'].count(
+                where={'repo_name': repo_name}
+            )
+
+            # Delete chunks and their metadata
+            chunks = self.collections['code'].get(
+                where={'repo_name': repo_name},
+                include=['ids']
+            )
+
+            if chunks['ids']:
+                # Delete from code collection
+                self.collections['code'].delete(
+                    where={'repo_name': repo_name}
+                )
+
+                # Delete associated metadata
+                meta_ids = [f"{chunk_id}_meta" for chunk_id in chunks['ids']]
+                self.collections['metadata'].delete(
+                    ids=meta_ids
+                )
+
+            # Force cleanup
+            gc.collect()
+
+            return count
+
+        except Exception as e:
+            logger.error(f"Error deleting repository chunks: {str(e)}")
+            return 0
+
+    async def get_collection_stats(self) -> Dict[str, Any]:
+        """Get detailed statistics about the vector store collections."""
+        try:
+            stats = {
+                'code_chunks': self.collections['code'].count(),
+                'documentation': self.collections['docs'].count(),
+                'metadata': self.collections['metadata'].count(),
+                'total_chunks': 0,
+                'languages': {},
+                'chunk_types': {}
+            }
+
+            # Calculate total
+            stats['total_chunks'] = sum(
+                count for key, count in stats.items()
+                if key in ['code_chunks', 'documentation']
+            )
+
+            # Get language and chunk type distribution
+            code_chunks = self.collections['code'].get(
+                include=['metadatas'],
+                limit=1000  # Sample size for performance
+            )
+
+            if code_chunks['metadatas']:
+                for metadata in code_chunks['metadatas']:
+                    lang = metadata.get('language', 'unknown')
+                    chunk_type = metadata.get('chunk_type', 'unknown')
+
+                    stats['languages'][lang] = stats['languages'].get(lang, 0) + 1
+                    stats['chunk_types'][chunk_type] = stats['chunk_types'].get(chunk_type, 0) + 1
+
+            return stats
+
+        except Exception as e:
+            logger.error(f"Error getting collection stats: {str(e)}")
+            return {'error': str(e)}
 
     def _monitor_memory_usage(self):
         """Monitor memory usage and trigger cleanup if necessary."""
-        import time
         import psutil
-
         while True:
             try:
                 process = psutil.Process(os.getpid())
                 memory_info = process.memory_info()
                 memory_usage_mb = memory_info.rss / 1024 / 1024
 
-                # If memory usage exceeds threshold, trigger garbage collection
                 if memory_usage_mb > settings.CACHE_SIZE_MB:
                     logger.warning(f"Memory usage high ({memory_usage_mb:.2f} MB). Triggering cleanup.")
                     gc.collect()
+
             except Exception as e:
                 logger.error(f"Error monitoring memory: {str(e)}")
 
             time.sleep(60)  # Check every minute
 
-    async def add_code_chunk(self,
-                            chunk_text: str,
-                            metadata: Dict[str, Any],
-                            chunk_id: Optional[str] = None) -> str:
-        """Add a code chunk to the vector store."""
-        try:
-            # Truncate large texts to prevent memory issues
-            if len(chunk_text) > 8000:
-                logger.warning(f"Truncating large chunk ({len(chunk_text)} chars)")
-                chunk_text = chunk_text[:8000] + "... [truncated]"
-
-            chunk_id = chunk_id or self._generate_id(chunk_text, prefix="c_")
-
-            # Add required metadata fields if missing
-            if "timestamp" not in metadata:
-                metadata["timestamp"] = str(int(time.time()))
-
-            # Add the chunk to the collection
-            self.code_collection.add(
-                documents=[chunk_text],
-                metadatas=[metadata],
-                ids=[chunk_id]
-            )
-
-            return chunk_id
-        except Exception as e:
-            logger.error(f"Error adding code chunk to vector store: {str(e)}")
-            raise
-
-    async def add_code_chunks_batch(self,
-                                   chunks: List[str],
-                                   metadatas: List[Dict[str, Any]]) -> List[str]:
-        """Add multiple code chunks in a memory-efficient batch process."""
-        if not chunks or len(chunks) == 0:
-            return []
-
-        try:
-            # Generate IDs
-            chunk_ids = [self._generate_id(chunk, prefix="c_") for chunk in chunks]
-
-            # Process in memory-efficient batches
-            batch_size = min(settings.BATCH_SIZE, 16)  # Further limit batch size for M2
-            result_ids = []
-
-            for i in range(0, len(chunks), batch_size):
-                batch_end = min(i + batch_size, len(chunks))
-
-                # Truncate large texts to prevent memory issues
-                batch_chunks = []
-                for chunk in chunks[i:batch_end]:
-                    if len(chunk) > 8000:
-                        logger.warning(f"Truncating large chunk ({len(chunk)} chars)")
-                        batch_chunks.append(chunk[:8000] + "... [truncated]")
-                    else:
-                        batch_chunks.append(chunk)
-
-                # Add the batch
-                self.code_collection.add(
-                    documents=batch_chunks,
-                    metadatas=metadatas[i:batch_end],
-                    ids=chunk_ids[i:batch_end]
-                )
-
-                result_ids.extend(chunk_ids[i:batch_end])
-
-                # Force garbage collection after each batch
-                if i > 0 and i % (batch_size * 3) == 0:
-                    gc.collect()
-
-            return result_ids
-        except Exception as e:
-            logger.error(f"Error batch adding code chunks: {str(e)}")
-            raise
-
-    async def search_code_chunks(self,
-                               query: str,
-                               n_results: int = 5,
-                               filter_dict: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Search for relevant code chunks with optimized memory usage."""
-        try:
-            # Truncate overly long queries
-            if len(query) > 1000:
-                query = query[:1000]
-
-            # Limit n_results to avoid memory issues
-            n_results = min(n_results, 20)
-
-            results = self.code_collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                where=filter_dict,
-                include=["documents", "metadatas", "distances", "embeddings"]
-            )
-
-            if not results["documents"] or len(results["documents"][0]) == 0:
-                return []
-
-            documents = []
-            for i, doc in enumerate(results["documents"][0]):
-                # Skip empty results
-                if not doc:
-                    continue
-
-                documents.append({
-                    "content": doc,
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": float(results["distances"][0][i]) if results["distances"] else None,
-                    "id": results["ids"][0][i]
-                })
-
-            return documents
-        except Exception as e:
-            logger.error(f"Error searching code chunks: {str(e)}")
-            return []
-
-    async def delete_by_repo(self, repo_name: str) -> int:
-        """Delete all chunks from a specific repository."""
-        try:
-            # First count how many we'll delete (for reporting)
-            count_results = self.code_collection.count(
-                where={"repo_name": repo_name}
-            )
-
-            # Delete the chunks
-            self.code_collection.delete(
-                where={"repo_name": repo_name}
-            )
-
-            # Force cleanup after large deletions
-            gc.collect()
-
-            logger.info(f"Deleted {count_results} chunks for repository: {repo_name}")
-            return count_results
-        except Exception as e:
-            logger.error(f"Error deleting repository chunks: {str(e)}")
-            return 0
-
-    async def get_collection_stats(self) -> Dict[str, Any]:
-        """Get statistics about the vector store collections."""
-        try:
-            code_count = self.code_collection.count()
-            docs_count = self.docs_collection.count()
-
-            return {
-                "code_chunks_count": code_count,
-                "docs_chunks_count": docs_count,
-                "total_chunks": code_count + docs_count
-            }
-        except Exception as e:
-            logger.error(f"Error getting collection stats: {str(e)}")
-            return {"error": str(e)}
-
-# Initialize vector store with memory monitoring
+# Initialize vector store service
 vector_store = VectorStoreService()
