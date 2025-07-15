@@ -1,24 +1,130 @@
 {
   "name": "devmind",
   "displayName": "DevMind",
-  "description": "AI - powered debugging and commit assistanet",
+  "description": "AI-powered debugging and commit assistant",
   "version": "0.0.1",
   "type": "module",
   "engines": {
     "vscode": "^1.101.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Programming Languages",
+    "Machine Learning"
   ],
-  "activationEvents": ["onCommand:devmind.generateCommit"],
+  "activationEvents": [
+    "onCommand:devmind.generateCommit",
+    "onCommand:devmind.askForDebug",
+    "onCommand:devmind.requestReview",
+    "onCommand:devmind.showMenu"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
-      "commands": [
-          {
-              "command": "devmind.generateCommit",
-              "title": "DevMind: Generate Commit Message"
-          }
-      ]
+    "commands": [
+      {
+        "command": "devmind.generateCommit",
+        "title": "DevMind: Generate Commit Message",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.askForDebug",
+        "title": "DevMind: Ask for Debug Help",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.showMenu",
+        "title": "DevMind: Show Menu",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.requestReview",
+        "title": "DevMind: Request Code Review",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.openSettings",
+        "title": "DevMind: Open Settings",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.manageAuth",
+        "title": "DevMind: Manage Authentication",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.signIn",
+        "title": "DevMind: Sign In",
+        "category": "DevMind"
+      },
+      {
+        "command": "devmind.signOut",
+        "title": "DevMind: Sign Out",
+        "category": "DevMind"
+      }
+    ],
+    "configuration": {
+      "title": "DevMind",
+      "properties": {
+        "devmind.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "DevMind API URL",
+          "scope": "window"
+        },
+        "devmind.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API Key for DevMind services",
+          "scope": "window"
+        },
+        "devmind.debug.autoSuggest": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically suggest fixes when debugging issues",
+          "scope": "window"
+        },
+                "devmind.debug.severity": {
+          "type": "string",
+          "enum": ["all", "error", "warning", "info"],
+          "default": "all",
+          "description": "Minimum severity level for debug suggestions",
+          "scope": "window"
+        },
+        "devmind.review.autoReview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically review code when saving files",
+          "scope": "window"
+        },
+        "devmind.review.categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["security", "performance", "style", "logic", "documentation"]
+          },
+          "default": ["security", "performance", "style"],
+          "description": "Categories to include in code reviews",
+          "scope": "window"
+        },
+        "devmind.commit.template": {
+          "type": "string",
+          "default": "feat(scope): description\n\nBody\n\nFooter",
+          "description": "Template for generated commit messages",
+          "scope": "window"
+        },
+        "devmind.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable telemetry to help improve DevMind",
+          "scope": "window"
+        },
+        "devmind.theme.useCustom": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use custom theme for DevMind panels",
+          "scope": "window"
+        }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -47,5 +153,8 @@
     "eslint-plugin-json": "^4.0.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.5"
   }
 }

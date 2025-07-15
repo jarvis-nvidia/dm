@@ -1,60 +1,61 @@
-// esbuild.cjs
-const esbuild = require("esbuild");
+// @ts-check
+const esbuild = require('esbuild');
+const { copyFileSync, existsSync, mkdirSync } = require('fs');
+const { join } = require('path');
 
-const production = process.argv.includes("--production");
-const watch = process.argv.includes("--watch");
+/** @typedef {import('esbuild').BuildOptions} BuildOptions */
 
-/**
- * Custom esbuild plugin for readable error logging
- * @type {import('esbuild').Plugin}
- */
-const esbuildProblemMatcherPlugin = {
-  name: "esbuild-problem-matcher",
-  setup(build) {
-    build.onStart(() => {
-      console.log(`[esbuild] ▶ Build started (${production ? "prod" : "dev"})`);
-    });
-    build.onEnd((result) => {
-      if (result.errors.length > 0) {
-        console.error(`\n❌ Build completed with ${result.errors.length} error(s):\n`);
-        result.errors.forEach(({ text, location }) => {
-          console.error(`✘ ${text}`);
-          if (location) {
-            console.error(`   at ${location.file}:${location.line}:${location.column}`);
-          }
-        });
-      } else {
-        console.log("[esbuild] ✅ Build completed successfully\n");
-      }
-    });
-  },
+/** @type BuildOptions */
+const baseConfig = {
+  entryPoints: ['./src/extension.ts'],
+  bundle: true,
+  outfile: './dist/extension.js',
+  external: ['vscode'],
+  format: 'cjs',
+  platform: 'node',
+  target: 'node16',
+  sourcemap: true,
+  logLevel: 'info',
 };
 
-async function main() {
-  const ctx = await esbuild.context({
-    entryPoints: ["src/extension.ts"],
-    bundle: true,
-    format: "cjs",
-    minify: production,
-    sourcemap: !production,
-    sourcesContent: false,
-    platform: "node",
-    outfile: "dist/extension.js",
-    external: ["vscode", "node-fetch"],
-    logLevel: "silent",
-    plugins: [esbuildProblemMatcherPlugin],
-  });
+// Check if dist directory exists and create if not
+if (!existsSync('./dist')) {
+  mkdirSync('./dist');
+}
 
-  if (watch) {
-    await ctx.watch();
-    console.log("[esbuild] 👀 Watching for changes...");
-  } else {
-    await ctx.rebuild();
-    await ctx.dispose();
+// Handle command line args
+const args = process.argv.slice(2);
+const isProduction = args.includes('--production');
+const isWatch = args.includes('--watch');
+
+/** @type BuildOptions */
+const buildConfig = {
+  ...baseConfig,
+  minify: isProduction,
+  sourcemap: !isProduction,
+};
+
+// Build function
+async function build() {
+  try {
+    const startTime = Date.now();
+
+    if (isWatch) {
+      // Start watch mode
+      const context = await esbuild.context(buildConfig);
+      await context.watch();
+      console.log('Watching for changes...');
+    } else {
+      // Do one-time build
+      await esbuild.build(buildConfig);
+
+      console.log(`Build completed in ${Date.now() - startTime}ms`);
+    }
+  } catch (err) {
+    console.error('Build failed:', err);
+    process.exit(1);
   }
 }
 
-main().catch((err) => {
-  console.error("❌ Build failed due to unexpected error:\n", err);
-  process.exit(1);
-});
+// Execute build
+build();

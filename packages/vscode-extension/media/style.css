@@ -1,0 +1,318 @@
+/* Base styles */
+:root {
+    --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    --container-padding: 20px;
+    --input-padding-vertical: 6px;
+    --input-padding-horizontal: 4px;
+    --input-margin-vertical: 4px;
+    --input-margin-horizontal: 0;
+}
+
+body {
+    padding: var(--container-padding);
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Common components */
+.action-button {
+    padding: 6px 12px;
+    margin: 4px;
+    border: none;
+    border-radius: 3px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    cursor: pointer;
+}
+
+.action-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.severity-badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.severity-error, .severity-high {
+    background-color: var(--vscode-errorForeground);
+    color: var(--vscode-editor-background);
+}
+
+.severity-warning, .severity-medium {
+    background-color: var(--vscode-warningForeground);
+    color: var(--vscode-editor-background);
+}
+
+.severity-info, .severity-low {
+    background-color: var(--vscode-infoForeground);
+    color: var(--vscode-editor-background);
+}
+
+/* Code blocks */
+pre {
+    padding: 12px;
+    margin: 8px 0;
+    background-color: var(--vscode-textCodeBlock-background);
+    border-radius: 3px;
+    overflow-x: auto;
+}
+
+code {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+}
+
+/* Debug panel specific styles */
+.debug-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.debug-stats {
+    display: flex;
+    gap: 12px;
+}
+
+.debug-item {
+    margin: 12px 0;
+    padding: 16px;
+    border-radius: 4px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border);
+}
+
+/* Review panel specific styles */
+.review-container {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 20px;
+    height: 100vh;
+}
+
+.review-content {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 20px;
+}
+
+.review-sidebar {
+    border-right: 1px solid var(--vscode-widget-border);
+    padding-right: 16px;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.file-item:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.file-item.active {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.review-summary {
+    padding: 16px;
+    background-color: var(--vscode-editor-background);
+    border-radius: 4px;
+}
+
+.summary-stats {
+    display: flex;
+    gap: 24px;
+    margin-top: 12px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .review-content {
+        grid-template-columns: 1fr;
+    }
+
+    .review-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--vscode-widget-border);
+        padding-bottom: 16px;
+    }
+}
+/* Add these styles to your existing styles.css file */
+
+/* Settings specific styles */
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: var(--vscode-editor-background);
+    border-radius: 4px;
+}
+
+.settings-section h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: var(--vscode-foreground);
+}
+
+.setting-item {
+    margin-bottom: 16px;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--vscode-foreground);
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="password"],
+.setting-item select,
+.setting-item textarea {
+    width: 100%;
+    padding: 6px 8px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+}
+
+.setting-item textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.settings-actions.dirty .action-button {
+    background-color: var(--vscode-button-prominentBackground);
+}
+
+.action-button.secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.action-button.secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+/* Add these styles to your existing styles.css file */
+
+.auth-container {
+    max-width: 600px;
+    margin: 40px auto;
+    padding: 20px;
+    text-align: center;
+}
+
+.auth-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.profile-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid var(--vscode-button-background);
+}
+
+.auth-options {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.auth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.action-button.github {
+    background-color: #24292e;
+    color: white;
+}
+
+.action-button.github:hover {
+    background-color: #1b1f23;
+}
+
+.action-button.apikey {
+    background-color: var(--vscode-button-background);
+}
+
+.action-button.warning {
+    background-color: var(--vscode-errorForeground);
+}
+
+.scope-list {
+    margin: 16px 0;
+    text-align: left;
+}
+
+.scope-list ul {
+    list-style: none;
+    padding: 0;
+}
+
+.scope-list li {
+    padding: 4px 0;
+    color: var(--vscode-foreground);
+}
