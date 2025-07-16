@@ -1,0 +1,13 @@
+@@ .. @@
+   "dependencies": {
+     "@headlessui/react": "^1.7.17",
+     "@heroicons/react": "^2.0.18",
+     "@tanstack/react-query": "^4.36.1",
+     "axios": "^1.6.2",
++    "framer-motion": "^10.16.16",
+     "jsonwebtoken": "^9.0.2",
+     "next": "15.4.1",
+     "react": "^18.2.0",
+     "react-dom": "^18.2.0",
+     "recharts": "^2.10.3"
+   },
