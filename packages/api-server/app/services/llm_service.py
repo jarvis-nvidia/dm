@@ -17,7 +17,11 @@ class LLMService:
         self.model = settings.GROQ_MODEL
         self.max_tokens = settings.MAX_TOKENS
         self.temperature = settings.TEMPERATURE
-        self.base_url = "https://api.groq.com/v1"
+        # Support both Groq and xAI APIs
+        if self.api_key.startswith("xai-"):
+            self.base_url = "https://api.x.ai/v1"
+        else:
+            self.base_url = "https://api.groq.com/v1"
 
         # Validate configuration
         if not self.api_key:
