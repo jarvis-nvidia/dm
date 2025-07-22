@@ -24,13 +24,7 @@ class VectorStoreService:
 
         # Configure ChromaDB client with optimized settings
         self.client = chromadb.PersistentClient(
-            path="./data/vectordb",
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True,
-                chroma_db_impl="duckdb+parquet",
-                persist_directory="./data/vectordb"
-            )
+            path="./data/vectordb"
         )
 
         # Initialize embedding function with caching
