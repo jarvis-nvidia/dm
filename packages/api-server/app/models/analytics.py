@@ -17,7 +17,7 @@ class AnalyticsTable(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     metric_name = Column(String, nullable=False, index=True)
     metric_value = Column(JSON, nullable=False)
-    metadata = Column(JSON, nullable=True)
+    metric_metadata = Column(JSON, nullable=True)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
