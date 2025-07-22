@@ -1,40 +1,62 @@
-"""Storyteller agent for generating commit messages and code narratives with M2 Mac optimization."""
-from typing import Dict, Any, List, Optional
-from app.agents.base_agent import BaseAgent
+"""Storyteller agent for generating commit messages and PR descriptions."""
 import logging
-import time
-import gc
+from typing import Dict, Any, Optional
+from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
 
-class StorytellerAgent(BaseAgent):
+class StorytellerAgent:
     def __init__(self):
-        super().__init__()
-        self.system_message = """You are DevMind's Storyteller Agent, an expert at creating meaningful commit messages and code narratives.
-Your task is to analyze code changes and craft descriptive, informative messages that explain the WHY behind the changes.
-Follow conventional commit format (type: description) when appropriate.
-Focus on clarity, context, and explaining the developer's intent rather than just listing what files were changed."""
+        self.system_prompts = {
+            "commit": """You are an expert software developer and storyteller. Your job is to create compelling, informative commit messages that tell the story of code changes.
 
-    @property
-    def agent_name(self) -> str:
-        return "storyteller_agent"
+Given a code diff, analyze the changes and generate a commit message that:
+1. Follows conventional commit format (type(scope): description)
+2. Clearly explains WHAT was changed and WHY
+3. Uses present tense, imperative mood
+4. Is concise but descriptive
+5. Mentions affected modules/components
 
-    @property
-    def agent_description(self) -> str:
-        return "Generates meaningful commit messages and code narratives for changes."
+Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build
 
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a commit message generation request with memory optimization."""
-        start_time = time.time()
+Examples:
+- feat(auth): add JWT token validation middleware
+- fix(api): resolve race condition in user session handling
+- refactor(components): extract reusable form validation logic""",
 
+            "pr_title": """You are an expert at creating clear, descriptive pull request titles.
+
+Given a code diff, create a PR title that:
+1. Summarizes the main change or feature
+2. Is clear and concise (50-80 characters)
+3. Uses present tense, imperative mood
+4. Indicates the scope/area affected
+
+Examples:
+- Add user authentication with JWT tokens
+- Fix memory leak in file upload component
+- Refactor database connection pooling""",
+
+            "pr_description": """You are an expert at writing comprehensive pull request descriptions.
+
+Given a code diff, create a PR description that includes:
+1. ## Summary - Brief overview of changes
+2. ## Changes Made - Detailed list of modifications
+3. ## Testing - How the changes were tested
+4. ## Breaking Changes - Any breaking changes (if applicable)
+5. ## Related Issues - Any related issues or tickets
+
+Be thorough but concise. Use bullet points and clear formatting."""
+        }
+
+    async def process(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Process storyteller request and generate appropriate message."""
         try:
-            # Extract input parameters
-            code_diff = input_data.get("code_diff", "")
-            file_paths = input_data.get("file_paths", [])
-            repository = input_data.get("repository", "")
-            message_type = input_data.get("message_type", "commit")  # commit, pr_title, pr_description
+            code_diff = request.get("code_diff", "")
+            message_type = request.get("message_type", "commit")
+            file_paths = request.get("file_paths", [])
+            repository = request.get("repository", "")
 
-            # Validate required inputs
             if not code_diff:
                 return {
                     "success": False,
@@ -42,162 +64,117 @@ Focus on clarity, context, and explaining the developer's intent rather than jus
                     "data": None
                 }
 
-            # Limit diff size to prevent memory issues
-            if len(code_diff) > 12000:  # 12KB limit
-                logger.warning(f"Code diff truncated from {len(code_diff)} chars")
-                code_diff = code_diff[:12000] + "\n... [diff truncated for memory optimization]"
-
-            # Build the prompt based on message type
-            if message_type == "commit":
-                prompt = self._build_commit_prompt(code_diff, file_paths, repository)
-                temp = 0.4  # More creative for commit messages
-            elif message_type == "pr_title":
-                prompt = self._build_pr_title_prompt(code_diff, file_paths, repository)
-                temp = 0.5  # More creative for PR titles
-            elif message_type == "pr_description":
-                prompt = self._build_pr_description_prompt(code_diff, file_paths, repository)
-                temp = 0.3  # More factual for PR descriptions
-            else:
-                prompt = self._build_commit_prompt(code_diff, file_paths, repository)
-                temp = 0.4
-
-            # Search for relevant code context if repository is provided
-            context_results = []
-            if repository and file_paths:
-                # Build a focused search query based on the changed files
-                search_files = file_paths[:3]  # Limit to first 3 files for efficiency
-                search_query = f"code in {' '.join(search_files)}"
-
-                context_results = await self.search_code_context(
-                    query=search_query,
-                    repo_filter=repository,
-                    n_results=3,
-                    # Limit context to avoid memory issues
-                    max_length=4000
-                )
-
-            # Generate the storyteller response
-            if context_results:
-                response = await self.generate_response(prompt, context_results, temperature=temp)
-            else:
-                response = await self.generate_response(prompt, temperature=temp)
-
-            # Extract and format the response
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-            # Clean up memory
-            gc.collect()
-
-            process_time = time.time() - start_time
-            logger.info(f"Storyteller request processed in {process_time:.2f}s for type: {message_type}")
-
-            return {
-                "success": True,
-                "message": f"{message_type.replace('_', ' ').title()} generation completed",
-                "data": {
-                    "message": content,
-                    "context_used": bool(context_results),
-                    "processing_time": f"{process_time:.2f}s"
+            # Build context from the request
+            context = self._build_context(code_diff, file_paths, repository)
+            
+            # Get system prompt based on message type
+            system_prompt = self.system_prompts.get(message_type, self.system_prompts["commit"])
+            
+            # Create user prompt
+            user_prompt = self._create_user_prompt(context, message_type)
+            
+            # Generate response using LLM
+            response = await llm_service.generate_completion(
+                prompt=user_prompt,
+                system_message=system_prompt,
+                temperature=0.3
+            )
+            
+            # Extract generated content
+            if response and "choices" in response and response["choices"]:
+                generated_message = response["choices"][0]["message"]["content"].strip()
+                
+                return {
+                    "success": True,
+                    "message": f"Generated {message_type} successfully",
+                    "data": {
+                        "type": message_type,
+                        "content": generated_message,
+                        "context": {
+                            "files_changed": len(file_paths) if file_paths else 0,
+                            "repository": repository,
+                            "diff_size": len(code_diff)
+                        }
+                    }
                 }
-            }
+            else:
+                return {
+                    "success": False,
+                    "message": "Failed to generate message from LLM",
+                    "data": None
+                }
 
         except Exception as e:
             logger.error(f"Error in storyteller agent: {str(e)}")
             return {
                 "success": False,
-                "message": f"Error processing {input_data.get('message_type', 'commit')} message request: {str(e)}",
+                "message": f"Error processing request: {str(e)}",
                 "data": None
             }
 
-    def _build_commit_prompt(self, code_diff: str, file_paths: List[str], repository: str) -> str:
-        """Build a prompt for generating a commit message."""
-        files_info = "\n".join(file_paths[:10]) if file_paths else "No file paths provided"
-        if len(file_paths) > 10:
-            files_info += f"\n... and {len(file_paths) - 10} more files"
+    def _build_context(self, code_diff: str, file_paths: list, repository: str) -> Dict[str, Any]:
+        """Build context for the LLM from the request data."""
+        context = {
+            "diff": code_diff,
+            "file_paths": file_paths,
+            "repository": repository,
+            "stats": self._analyze_diff(code_diff)
+        }
+        return context
 
-        return f"""
-I need a meaningful commit message for the following code changes.
-{f"Repository: {repository}" if repository else ""}
+    def _analyze_diff(self, diff: str) -> Dict[str, Any]:
+        """Analyze the diff to extract statistics."""
+        lines = diff.split('\n')
+        stats = {
+            "additions": 0,
+            "deletions": 0,
+            "files_modified": 0,
+            "languages": set(),
+            "changes_type": []
+        }
+        
+        current_file = None
+        for line in lines:
+            if line.startswith('+++') or line.startswith('---'):
+                if line.startswith('+++') and not line.endswith('/dev/null'):
+                    current_file = line[4:]
+                    stats["files_modified"] += 1
+                    # Detect language from file extension
+                    if '.' in current_file:
+                        ext = current_file.split('.')[-1].lower()
+                        if ext in ['py', 'js', 'ts', 'jsx', 'tsx', 'java', 'cpp', 'c', 'go', 'rs']:
+                            stats["languages"].add(ext)
+            elif line.startswith('+') and not line.startswith('+++'):
+                stats["additions"] += 1
+            elif line.startswith('-') and not line.startswith('---'):
+                stats["deletions"] += 1
+        
+        stats["languages"] = list(stats["languages"])
+        return stats
 
-Changed Files:
-{files_info}
+    def _create_user_prompt(self, context: Dict[str, Any], message_type: str) -> str:
+        """Create user prompt based on context and message type."""
+        stats = context["stats"]
+        
+        prompt = f"""Please analyze the following code changes and generate a {message_type}.
 
-Code Changes:
+**Repository**: {context["repository"] or "Unknown"}
+**Files Changed**: {len(context["file_paths"])} files
+**Lines Added**: {stats["additions"]}
+**Lines Deleted**: {stats["deletions"]}
+**Languages**: {', '.join(stats["languages"]) or "Unknown"}
+
+**Files Modified**:
+{chr(10).join(f"- {fp}" for fp in context["file_paths"]) if context["file_paths"] else "- [File paths not provided]"}
+
+**Code Diff**:
 ```diff
-{code_diff}
-
-Please create a commit message that:
-1. Has a clear, concise subject line (50-72 chars)
-2. Explains WHY the change was made, not just WHAT was changed
-3. Mentions any important technical details
-4. Follows the conventional commits format (type: description)
-5. References related issues or tickets if identifiable from the context
-
-Generate only the commit message text without any additional explanation.
-"""
-
-    def _build_pr_title_prompt(self, code_diff: str, file_paths: List[str], repository: str) -> str:
-        """Build a prompt for generating a PR title."""
-        files_info = "\n".join(file_paths[:5]) if file_paths else "No file paths provided"
-        if len(file_paths) > 5:
-            files_info += f"\n... and {len(file_paths) - 5} more files"
-
-        # Use a smaller diff sample for PR title
-        diff_preview = code_diff[:3000] + "..." if len(code_diff) > 3000 else code_diff
-
-        return f"""
-I need a meaningful PR title for the following code changes.
-{f"Repository: {repository}" if repository else ""}
-
-Changed Files:
-{files_info}
-
-Code Changes (sample):
-```diff
-{diff_preview}
+{context["diff"][:5000]}{"..." if len(context["diff"]) > 5000 else ""}
 ```
 
-Please create a PR title that:
-1. Is clear and concise (max 100 chars)
-2. Summarizes the purpose of the changes
-3. Follows format: [Type] Short description
-   (Types: Feature, Fix, Refactor, Docs, Test, etc.)
-4. References related issues if identifiable from context
+Generate a {"commit message" if message_type == "commit" else message_type.replace("_", " ")} that clearly explains the changes made."""
+        
+        return prompt
 
-Generate only the PR title without any additional explanation.
-"""
-
-    def _build_pr_description_prompt(self, code_diff: str, file_paths: List[str], repository: str) -> str:
-        """Build a prompt for generating a PR description."""
-        files_info = "\n".join(file_paths[:8]) if file_paths else "No file paths provided"
-        if len(file_paths) > 8:
-            files_info += f"\n... and {len(file_paths) - 8} more files"
-
-        # Use a smaller diff sample for PR description
-        diff_preview = code_diff[:6000] + "..." if len(code_diff) > 6000 else code_diff
-
-        return f"""
-I need a detailed PR description for the following code changes.
-{f"Repository: {repository}" if repository else ""}
-
-Changed Files:
-{files_info}
-
-Code Changes (sample):
-```diff
-{diff_preview}
-```
-
-Please create a PR description that includes:
-1. A summary of the changes
-2. The purpose and background of these changes
-3. Implementation details that reviewers should know
-4. Testing performed
-5. Any related issues or documentation
-6. Areas that need special review attention
-
-Format the description in markdown with appropriate sections.
-"""
-
-# Initialize the storyteller agent
+# Initialize storyteller agent
 storyteller_agent = StorytellerAgent()
