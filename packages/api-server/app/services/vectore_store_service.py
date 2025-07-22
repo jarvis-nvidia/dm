@@ -27,10 +27,15 @@ class VectorStoreService:
             path="./data/vectordb"
         )
 
-        # Initialize embedding function with caching
-        self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=settings.EMBEDDING_MODEL
-        )
+        # Initialize embedding function with default
+        try:
+            self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name=settings.EMBEDDING_MODEL
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize SentenceTransformer embedding: {e}")
+            # Use default embedding function as fallback
+            self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
 
         # Initialize collections with optimized settings
         self.collections = {
