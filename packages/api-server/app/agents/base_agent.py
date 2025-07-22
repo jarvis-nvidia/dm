@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, AsyncGenerator
 from app.services.llm_service import llm_service
-from app.services.vector_store_service import vector_store
+from app.services.vectore_store_service import vector_store
 from app.services.git_service import git_service
 import logging
 import time
