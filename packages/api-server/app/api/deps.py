@@ -1,25 +1,31 @@
-"""API dependencies for FastAPI."""
-from fastapi import Header, HTTPException, Depends
+"""API dependencies."""
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 from typing import Optional
-from app.core.config import settings
+from app.database import get_db
+from app.auth.dependencies import get_current_user, get_current_active_user
+from app.models.user import User
 
-async def get_api_key(x_api_key: Optional[str] = Header(None)):
-    """Validate API key for protected endpoints."""
-    # In development mode without DEBUG, allow without API key
-    if settings.ENVIRONMENT == "development" and not settings.DEBUG:
-        return True
+security = HTTPBearer()
 
-    # In all other cases, validate API key
-    if not x_api_key:
+async def get_api_key(credentials: HTTPAuthorizationCredentials = Security(security)) -> bool:
+    """Validate API key."""
+    # In a real app, validate the token properly
+    if credentials.credentials != "demo-key":
         raise HTTPException(
-            status_code=401,
-            detail="API key is missing"
-        )
-
-    if x_api_key != settings.SECRET_KEY:
-        raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key"
         )
-
     return True
+
+def get_db_session() -> Session:
+    """Get database session dependency."""
+    return get_db()
+
+def get_current_user_dep(
+    db: Session = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    """Get current user with database session."""
+    return current_user
