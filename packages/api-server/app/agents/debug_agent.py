@@ -56,16 +56,22 @@ Focus on the most likely cause of the issue rather than listing all possibilitie
                 error_message = error_message[:2000] + "\n... [truncated for memory optimization]"
 
             # Build the debugging prompt
+            error_part = f"Error Message: {error_message}" if error_message else ""
+            code_part = f"Code Snippet:\n```{language}\n{code_snippet}\n```" if code_snippet else ""
+            file_part = f"File: {file_path}" if file_path else ""
+            repo_part = f"Repository: {repository}" if repository else ""
+            lang_part = f"Language: {language}" if language else ""
+            
             prompt = f"""
 Debug Request: {problem_description}
 
-{f"Error Message: {error_message}" if error_message else ""}
+{error_part}
 
-{f"Code Snippet:\n```{language}\n{code_snippet}\n```" if code_snippet else ""}
+{code_part}
 
-{f"File: {file_path}" if file_path else ""}
-{f"Repository: {repository}" if repository else ""}
-{f"Language: {language}" if language else ""}
+{file_part}
+{repo_part}
+{lang_part}
 
 Please analyze this issue and provide:
 1. The root cause of the problem
