@@ -165,7 +165,7 @@ Be thorough but concise. Use bullet points and clear formatting."""
 **Languages**: {', '.join(stats["languages"]) or "Unknown"}
 
 **Files Modified**:
-{chr(10).join(f"- {fp}" for fp in context["file_paths"]) if context["file_paths"] else "- [File paths not provided]"}
+{chr(10).join(f"- {fp}" for fp in (context["file_paths"] or [])) if context.get("file_paths") else "- [File paths not provided]"}
 
 **Code Diff**:
 ```diff
