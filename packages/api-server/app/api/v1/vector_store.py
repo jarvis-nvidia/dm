@@ -1,7 +1,7 @@
 """Vector store and file processing API endpoints."""
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
-from app.services.vector_store_service import vector_store
+from app.services.vectore_store_service import vector_store
 from app.services.git_service import git_service
 from app.api.deps import get_api_key
 import logging
