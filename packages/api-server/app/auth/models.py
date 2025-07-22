@@ -66,7 +66,7 @@ class TokenData(BaseModel):
     scopes: List[str] = []
 
 class OAuth2TokenRequest(BaseModel):
-    grant_type: str = Field(..., regex='^(authorization_code|refresh_token)$')
+    grant_type: str = Field(..., pattern='^(authorization_code|refresh_token)$')
     code: Optional[str] = None
     refresh_token: Optional[str] = None
     client_id: str
