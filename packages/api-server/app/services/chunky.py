@@ -146,7 +146,7 @@ class ChunkingStrategy:
             }
         }
 
-    async def process_file(self, file_path: str, content: str, metadata: Dict[str, Any]) -> Generator[CodeChunk, None, None]:
+    def process_file(self, file_path: str, content: str, metadata: Dict[str, Any]) -> Generator[CodeChunk, None, None]:
         """Process file content and yield chunks asynchronously."""
         language = self.detect_language(file_path, content)
         chunks = self.create_chunks(content, file_path, metadata, language)
