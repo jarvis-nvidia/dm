@@ -159,7 +159,7 @@ Be thorough but concise. Use bullet points and clear formatting."""
         prompt = f"""Please analyze the following code changes and generate a {message_type}.
 
 **Repository**: {context["repository"] or "Unknown"}
-**Files Changed**: {len(context["file_paths"])} files
+**Files Changed**: {len(context["file_paths"] or [])} files
 **Lines Added**: {stats["additions"]}
 **Lines Deleted**: {stats["deletions"]}
 **Languages**: {', '.join(stats["languages"]) or "Unknown"}
