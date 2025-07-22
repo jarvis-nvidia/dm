@@ -29,9 +29,7 @@ class VectorStoreService:
 
         # Initialize embedding function with caching
         self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=settings.EMBEDDING_MODEL,
-            normalize_embeddings=True,
-            cache_dir="./data/cache/embeddings"
+            model_name=settings.EMBEDDING_MODEL
         )
 
         # Initialize collections with optimized settings
