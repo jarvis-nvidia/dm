@@ -4,6 +4,7 @@ Optimized for M2 Mac with 8GB RAM and 256GB storage.
 """
 import os
 from typing import Optional
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
