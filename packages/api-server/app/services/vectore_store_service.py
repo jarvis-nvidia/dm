@@ -6,7 +6,7 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 from app.core.config import settings
-from app.services.chunking import chunking_strategy, CodeChunk
+from app.services.chunky import chunking_strategy, CodeChunk
 import logging
 import gc
 import threading
