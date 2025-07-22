@@ -1,0 +1,15 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Brain Icon -->
+  <path d="M8 12C8 10.8954 8.89543 10 10 10H12C13.1046 10 14 10.8954 14 12V14L16 16L18 14V12C18 10.8954 18.8954 10 20 10H22C23.1046 10 24 10.8954 24 12V14C24 15.1046 23.1046 16 22 16H20L18 18L16 16H14L12 18L10 16H8V12Z" fill="#333" stroke="#333" stroke-width="1"/>
+  
+  <!-- DevMind Text -->
+  <text x="32" y="20" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333">
+    Dev
+  </text>
+  <text x="62" y="20" font-family="Arial, sans-serif" font-size="16" font-weight="300" fill="#666">
+    MIND
+  </text>
+  
+  <!-- Underline -->
+  <line x1="32" y1="24" x2="108" y2="24" stroke="#333" stroke-width="2"/>
+</svg>
