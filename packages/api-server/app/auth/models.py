@@ -1,7 +1,7 @@
-"""Authentication models for DevMind API."""
-from datetime import datetime
+"""Authentication models and schemas."""
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field, validator
+from datetime import datetime
 from enum import Enum
 
 class UserRole(str, Enum):
@@ -9,77 +9,40 @@ class UserRole(str, Enum):
     USER = "user"
     GUEST = "guest"
 
-class UserBase(BaseModel):
-    email: EmailStr
-    username: str = Field(..., min_length=3, max_length=50)
-    full_name: Optional[str] = Field(None, max_length=100)
-    is_active: bool = True
+class TokenData(BaseModel):
+    user_id: Optional[str] = None
+    username: Optional[str] = None
     role: UserRole = UserRole.USER
-
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)
-    confirm_password: str = Field(..., min_length=8, max_length=100)
-
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'password' in values and v != values['password']:
-            raise ValueError('Passwords do not match')
-        return v
-
-class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, max_length=100)
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
-
-class UserInDB(UserBase):
-    id: int
-    hashed_password: str
-    created_at: datetime
-    updated_at: datetime
-    last_login: Optional[datetime] = None
-    github_username: Optional[str] = None
-    api_key: Optional[str] = None
-
-    class Config:
-        orm_mode = True
-
-class User(UserBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    last_login: Optional[datetime] = None
-    github_username: Optional[str] = None
-
-    class Config:
-        orm_mode = True
+    scopes: List[str] = []
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str
     expires_in: int
-    user: User
-
-class TokenData(BaseModel):
-    user_id: Optional[int] = None
-    username: Optional[str] = None
-    role: Optional[UserRole] = None
     scopes: List[str] = []
 
-class OAuth2TokenRequest(BaseModel):
-    grant_type: str = Field(..., pattern='^(authorization_code|refresh_token)$')
-    code: Optional[str] = None
-    refresh_token: Optional[str] = None
-    client_id: str
-    client_secret: str
-    redirect_uri: Optional[str] = None
+class TokenPayload(BaseModel):
+    sub: Optional[str] = None
+    username: Optional[str] = None
+    role: str = "user"
+    scopes: List[str] = []
+    exp: Optional[int] = None
+
+class User(BaseModel):
+    id: str
+    username: str
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    avatar_url: Optional[str] = None
+    full_name: Optional[str] = None
 
 class GitHubUser(BaseModel):
-    login: str
     id: int
-    avatar_url: str
+    login: str
+    email: Optional[str]
     name: Optional[str]
-    email: Optional[EmailStr]
-    bio: Optional[str]
-
-    class Config:
-        orm_mode = True
+    avatar_url: Optional[str]
+    html_url: str
