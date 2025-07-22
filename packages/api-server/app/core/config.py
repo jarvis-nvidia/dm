@@ -30,6 +30,11 @@ class Settings:
     # Vector Store Configuration
     VECTOR_DB_URL: str = os.getenv("VECTOR_DB_URL", "sqlite:///./data/devmind_vectors.db")
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Chunking Configuration
+    MIN_CHUNK_SIZE: int = int(os.getenv("MIN_CHUNK_SIZE", "100"))
+    MAX_CHUNK_SIZE: int = int(os.getenv("MAX_CHUNK_SIZE", "2000"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
     # Memory & Performance Settings (M2 Mac Optimized)
     MAX_WORKERS: int = int(os.getenv("MAX_WORKERS", "4"))  # Optimal for M2 8GB
