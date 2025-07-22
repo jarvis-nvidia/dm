@@ -167,4 +167,3 @@ class BaseAgent(ABC):
             total_chars += len(entry)
 
         return "\n".join(formatted)
-base_agent = BaseAgent()
