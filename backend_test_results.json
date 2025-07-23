@@ -1,0 +1,74 @@
+{
+  "summary": {
+    "passed": 0,
+    "failed": 9,
+    "total": 9
+  },
+  "backend_url": "http://localhost:8001",
+  "timestamp": "2025-07-23T06:52:09.572995",
+  "detailed_results": [
+    {
+      "test": "Health Check",
+      "success": false,
+      "message": "Connection error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e2004c90>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:05.062911"
+    },
+    {
+      "test": "Create Project",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/projects (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b49010>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:05.564447"
+    },
+    {
+      "test": "List Projects",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/projects (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b4a050>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:06.066012"
+    },
+    {
+      "test": "Code Analysis",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/code/analyze (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b4b610>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:06.567790"
+    },
+    {
+      "test": "Commit Analysis",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/commits/analyze (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b4a7d0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:07.069288"
+    },
+    {
+      "test": "Debug Session",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/debug/session (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b48f50>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:07.570800"
+    },
+    {
+      "test": "Store Embedding",
+      "success": false,
+      "message": "No project ID available (create project first)",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:08.070972"
+    },
+    {
+      "test": "Search Similar Code",
+      "success": false,
+      "message": "Error: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /api/code/search-similar (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0xfb07e1b4bf90>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:08.572448"
+    },
+    {
+      "test": "Learning Patterns",
+      "success": false,
+      "message": "No project ID available (create project first)",
+      "details": null,
+      "timestamp": "2025-07-23T06:52:09.072612"
+    }
+  ]
+}
